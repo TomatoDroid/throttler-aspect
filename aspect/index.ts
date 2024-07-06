@@ -20,18 +20,32 @@ class Aspect implements IPreContractCallJP {
      */
     preContractCall(input: PreContractCallInput): void {
         // read the throttle config from the properties and decode
-
+        const interval = sys.aspect.property.get<u64>("interval")
+        const limit = sys.aspect.property.get<u64>("limit")
         // get the contract address, from address and build the storage prefix
-
+        const contractAdddress = uint8ArrayToHex(input.call!.to)
+        const from = uint8ArrayToHex(input.call!.from)
+        const stroagePerfix = `${contractAdddress}:${from}`
         // load the current block timestamp
+        const blockTimeBytes = sys.hostApi.runtimeContext.get('block.header.timestemp')
+        const blockTime = Protobuf.decode<UintData>(blockTimeBytes, UintData.decode).data
 
         // load last execution timestamp
-
+        const lastExecState = sys.aspect.mutableState.get<u64>(stroagePerfix + 'lastExecAt')
+        const lastExec = lastExecState.unwrap()
         // check if the throttle interval has passed, revert if not
-
+        if (lastExec > 0 && (blockTime - lastExec) < interval) {
+            sys.revert("throttle")
+        }
         // check if the throttle limit has been reached, revert if so
-
+        const execTimesState = sys.aspect.mutableState.get<u64>(stroagePerfix + 'execTimes')
+        const execTimes = execTimesState.unwrap();
+        if (limit && execTimes >= limit) {
+            sys.revert("exection time exceeded")
+        }
         // update the throttle state
+        lastExecState.set(blockTime)
+        execTimesState.set(execTimes+1)
     }
 
     /**
